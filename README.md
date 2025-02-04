@@ -15,7 +15,7 @@ go get github.com/vts0/sshclient
 ```
 
 ## Usage
-### Creating an SSH Client
+### Password Authentication
 ```go
 package main
 
@@ -26,12 +26,15 @@ import (
 )
 
 func main() {
-	client, err := sshclient.NewClient("example.com", "username",
-		sshclient.WithAuthType(sshclient.KeyAuth),
-		sshclient.WithKeyPath("/path/to/private/key"),
+	client, err := sshclient.NewClient("example.com", "user",
+	    sshclient.WithAuthType(sshclient.PasswordAuth),
+	    sshclient.WithPassword("securepassword"),
+	    sshclient.WithPort(22),
+	    sshclient.WithTimeout(30*time.Second),
+	    sshclient.WithUseSFTP(true),
 	)
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+	    log.Fatal(err)
 	}
 	defer client.Close()
 
