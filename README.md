@@ -17,32 +17,17 @@ go get github.com/vts0/sshclient
 ## Usage
 ### Password Authentication
 ```go
-package main
-
-import (
-	"fmt"
-	"log"
-	"github.com/vts0/sshclient"
+client, err := sshclient.NewClient("example.com", "user",
+    sshclient.WithAuthType(sshclient.PasswordAuth),
+    sshclient.WithPassword("securepassword"),
+    sshclient.WithPort(22),
+    sshclient.WithTimeout(30*time.Second),
+    sshclient.WithUseSFTP(true),
 )
-
-func main() {
-	client, err := sshclient.NewClient("example.com", "user",
-	    sshclient.WithAuthType(sshclient.PasswordAuth),
-	    sshclient.WithPassword("securepassword"),
-	    sshclient.WithPort(22),
-	    sshclient.WithTimeout(30*time.Second),
-	    sshclient.WithUseSFTP(true),
-	)
-	if err != nil {
-	    log.Fatal(err)
-	}
-	defer client.Close()
-
-	output, err := client.Execute("ls -l")
-	if err != nil {
-		log.Fatalf("Command execution failed: %v", err)
-	}
-	fmt.Println(output)
+if err != nil {
+    log.Fatalf("Failed to connect: %v", err)
+}
+defer client.Close()
 }
 ```
 
