@@ -43,7 +43,7 @@ func main() {
 }
 ```
 
-### Logging in with an SSH Key
+### Key-Based Authentication
 ```go
 client, err := sshclient.NewClient("example.com", "username",
 	sshclient.WithAuthType(sshclient.KeyAuth),
