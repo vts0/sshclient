@@ -28,7 +28,6 @@ if err != nil {
     log.Fatalf("Failed to connect: %v", err)
 }
 defer client.Close()
-}
 ```
 
 ### Key-Based Authentication
