@@ -171,6 +171,20 @@ func (c *Client) Execute(command string) (string, error) {
 	return string(output), nil
 }
 
+func (c *Client) ExecuteCommands(commands []string) ([]string, error) {
+    var outputs []string
+
+    for _, cmd := range commands {
+        output, err := c.Execute(cmd)
+        if err != nil {
+            return nil, fmt.Errorf("command '%s' failed: %w", cmd, err)
+        }
+        outputs = append(outputs, output)
+    }
+
+    return outputs, nil
+}
+
 // UploadFile uploads a file to the remote server via SFTP.
 func (c *Client) UploadFile(ctx context.Context, localPath, remotePath string) error {
 	if c.sftp == nil {
