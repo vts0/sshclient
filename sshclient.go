@@ -228,6 +228,124 @@ func (c *Client) DownloadFile(ctx context.Context, remotePath, localPath string)
 	return nil
 }
 
+// UploadDirectory uploads an entire local directory to the remote server via SFTP.
+func (c *Client) UploadDirectory(ctx context.Context, localDir, remoteDir string) error {
+	if c.sftp == nil {
+		return fmt.Errorf("SFTP client is not initialized")
+	}
+
+	info, err := os.Stat(localDir)
+	if err != nil {
+		return fmt.Errorf("failed to access local directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("local path is not a directory: %s", localDir)
+	}
+
+	err = filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		relPath, err := filepath.Rel(localDir, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path: %w", err)
+		}
+		relPath = filepath.ToSlash(relPath)
+		remotePath := path.Join(remoteDir, relPath)
+
+		if info.IsDir() {
+			if err := c.sftp.MkdirAll(remotePath); err != nil {
+				return fmt.Errorf("failed to create remote directory %s: %w", remotePath, err)
+			}
+		} else {
+			remoteDirPath := path.Dir(remotePath)
+			if err := c.sftp.MkdirAll(remoteDirPath); err != nil {
+				return fmt.Errorf("failed to create remote directory %s: %w", remoteDirPath, err)
+			}
+			if err := c.UploadFile(ctx, path, remotePath); err != nil {
+				return fmt.Errorf("failed to upload file %s: %w", path, err)
+			}
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// DownloadDirectory downloads an entire remote directory from the server via SFTP.
+func (c *Client) DownloadDirectory(ctx context.Context, remoteDir, localDir string) error {
+	if c.sftp == nil {
+		return fmt.Errorf("SFTP client is not initialized")
+	}
+
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		return fmt.Errorf("failed to create local directory: %w", err)
+	}
+
+	var walk func(string) error
+	walk = func(currentRemoteDir string) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		entries, err := c.sftp.ReadDir(currentRemoteDir)
+		if err != nil {
+			return fmt.Errorf("failed to read remote directory %s: %w", currentRemoteDir, err)
+		}
+
+		for _, entry := range entries {
+			remoteEntryPath := path.Join(currentRemoteDir, entry.Name())
+			relPath, err := getRelPath(remoteDir, remoteEntryPath)
+			if err != nil {
+				return fmt.Errorf("failed to get relative path for %s: %w", remoteEntryPath, err)
+			}
+			localEntryPath := filepath.Join(localDir, filepath.FromSlash(relPath))
+
+			if entry.IsDir() {
+				if err := os.MkdirAll(localEntryPath, 0755); err != nil {
+					return fmt.Errorf("failed to create local directory %s: %w", localEntryPath, err)
+				}
+				if err := walk(remoteEntryPath); err != nil {
+					return err
+				}
+			} else {
+				if err := c.DownloadFile(ctx, remoteEntryPath, localEntryPath); err != nil {
+					return fmt.Errorf("failed to download file %s: %w", remoteEntryPath, err)
+				}
+			}
+		}
+		return nil
+	}
+
+	return walk(remoteDir)
+}
+
+// getRelPath computes the relative path of target relative to base in Unix-style format.
+func getRelPath(base, target string) (string, error) {
+	base = path.Clean(base)
+	target = path.Clean(target)
+
+	if base == "." {
+		return target, nil
+	}
+
+	if !strings.HasPrefix(target, base+"/") {
+		return "", fmt.Errorf("target %s is not within base %s", target, base)
+	}
+
+	return strings.TrimPrefix(target, base+"/"), nil
+}
+
 // loadPrivateKey loads and parses an SSH private key with error wrapping.
 func loadPrivateKey(privateKeyPath, passphrase string) (ssh.Signer, error) {
 	keyData, err := os.ReadFile(privateKeyPath)
